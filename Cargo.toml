@@ -1,0 +1,11 @@
+[workspace]
+members = ["crates/*", "xtask", "xtask/"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Binh Tran <binhtran432k@gmail.com>"]
+
+[workspace.dependencies]
+expect-test = "1.5.0"
