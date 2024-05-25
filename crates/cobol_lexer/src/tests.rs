@@ -103,3 +103,26 @@ fn strs() {
         "#]],
     )
 }
+
+#[test]
+fn idents_or_numbers() {
+    check_lexing(r#"
+        123
+        123e10
+        abc
+        abc123
+        abc123a
+    "#, expect![[r#"
+        Token { kind: Whitespace, len: 9 }
+        Token { kind: NumberIdent, len: 3 }
+        Token { kind: Whitespace, len: 9 }
+        Token { kind: Ident, len: 6 }
+        Token { kind: Whitespace, len: 9 }
+        Token { kind: Ident, len: 3 }
+        Token { kind: Whitespace, len: 9 }
+        Token { kind: Ident, len: 6 }
+        Token { kind: Whitespace, len: 9 }
+        Token { kind: Ident, len: 7 }
+        Token { kind: Whitespace, len: 5 }
+    "#]])
+}

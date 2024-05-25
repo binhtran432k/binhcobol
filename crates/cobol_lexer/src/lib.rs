@@ -55,12 +55,16 @@ pub enum TokenKind {
 
     /// "ident" or "continue"
     ///
-    /// At this step, keywords and invalid hyphen ending words are
-    ///  also considered identifiers.
+    /// At this step, keywords are  also considered identifiers.
+    /// Note that invalid ident with ending `-` is also catched, user
+    /// must check this invalid token by themself.
     Ident,
 
     /// Like the above, but containing invalid unicode codepoints.
     InvalidIdent,
+
+    /// Like  `Ident` but only include number
+    NumberIdent,
 
     /// An unknown prefix, like `foo'`, `foo"`.
     ///
@@ -135,12 +139,12 @@ pub fn is_whitespace(c: char) -> bool {
 
 /// True if `c` is valid as a first character of an identifier.
 pub fn is_id_start(c: char) -> bool {
-    matches!(c, |'a'..='z'| 'A'..='Z' | '0'..='9')
+    c.is_ascii_alphanumeric()
 }
 
 /// True if `c` is valid as a non-first character of an identifier.
 pub fn is_id_continue(c: char) -> bool {
-    c == '_' || c == '-' || is_id_start(c)
+    matches!(c, '_' | '-') || is_id_start(c)
 }
 
 /// The passed string is lexically an identifier.
@@ -170,9 +174,11 @@ impl Cursor<'_> {
             // Whitespace sequence.
             c if is_whitespace(c) => self.whitespace(),
 
+            c if c.is_ascii_digit() => self.number_or_ident_or_unknown_prefix(),
+
             // Identifier (this should be checked after other variant that can
             // start as identifier).
-            c if is_id_start(c) => self.ident_or_unknown_prefix(),
+            c if c.is_ascii_alphabetic() => self.ident_or_unknown_prefix(),
 
             // One-symbol tokens.
             ';' => TokenKind::Semi,
@@ -226,6 +232,18 @@ impl Cursor<'_> {
             '"' | '\'' => TokenKind::UnknownPrefix,
             c if !c.is_ascii() => TokenKind::InvalidIdent,
             _ => TokenKind::Ident,
+        }
+    }
+
+    fn number_or_ident_or_unknown_prefix(&mut self) -> TokenKind {
+        debug_assert!(self.prev().is_ascii_digit());
+        self.eat_while(|c| c.is_ascii_digit());
+        // Known prefixes must have been handled earlier. So if
+        // we see a prefix here, it is definitely an unknown prefix.
+        match self.first() {
+            '"' | '\'' => TokenKind::UnknownPrefix,
+            c if is_id_continue(c) => self.ident_or_unknown_prefix(),
+            _ => TokenKind::NumberIdent,
         }
     }
 
