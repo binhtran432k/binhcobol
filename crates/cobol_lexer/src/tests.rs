@@ -50,7 +50,7 @@ fn smoke_test() {
             Token { kind: Whitespace, len: 12 }
             Token { kind: Ident, len: 7 }
             Token { kind: Whitespace, len: 1 }
-            Token { kind: Str { terminated: true }, len: 15 }
+            Token { kind: Literal { kind: Str { terminated: true }, suffix_start: 15 }, len: 15 }
             Token { kind: Dot, len: 1 }
             Token { kind: Whitespace, len: 12 }
             Token { kind: Ident, len: 6 }
@@ -78,27 +78,27 @@ fn strs() {
         "#,
         expect![[r#"
             Token { kind: Whitespace, len: 9 }
-            Token { kind: Str { terminated: true }, len: 5 }
+            Token { kind: Literal { kind: Str { terminated: true }, suffix_start: 5 }, len: 5 }
             Token { kind: Whitespace, len: 9 }
-            Token { kind: Str { terminated: true }, len: 10 }
+            Token { kind: Literal { kind: Str { terminated: true }, suffix_start: 10 }, len: 10 }
             Token { kind: Whitespace, len: 9 }
-            Token { kind: Str { terminated: true }, len: 9 }
+            Token { kind: Literal { kind: Str { terminated: true }, suffix_start: 9 }, len: 9 }
             Token { kind: Whitespace, len: 9 }
-            Token { kind: Str { terminated: false }, len: 5 }
+            Token { kind: Literal { kind: Str { terminated: false }, suffix_start: 5 }, len: 5 }
             Token { kind: Whitespace, len: 8 }
-            Token { kind: Str { terminated: true }, len: 10 }
+            Token { kind: Literal { kind: Str { terminated: true }, suffix_start: 10 }, len: 10 }
             Token { kind: Whitespace, len: 9 }
-            Token { kind: Str { terminated: true }, len: 9 }
+            Token { kind: Literal { kind: Str { terminated: true }, suffix_start: 9 }, len: 9 }
             Token { kind: Whitespace, len: 9 }
-            Token { kind: Str { terminated: true }, len: 5 }
+            Token { kind: Literal { kind: Str { terminated: true }, suffix_start: 5 }, len: 5 }
             Token { kind: Whitespace, len: 9 }
-            Token { kind: Str { terminated: true }, len: 10 }
+            Token { kind: Literal { kind: Str { terminated: true }, suffix_start: 10 }, len: 10 }
             Token { kind: Whitespace, len: 9 }
-            Token { kind: Str { terminated: true }, len: 9 }
+            Token { kind: Literal { kind: Str { terminated: true }, suffix_start: 9 }, len: 9 }
             Token { kind: Whitespace, len: 9 }
-            Token { kind: Str { terminated: false }, len: 5 }
+            Token { kind: Literal { kind: Str { terminated: false }, suffix_start: 5 }, len: 5 }
             Token { kind: Whitespace, len: 8 }
-            Token { kind: Str { terminated: true }, len: 33 }
+            Token { kind: Literal { kind: Str { terminated: true }, suffix_start: 33 }, len: 33 }
             Token { kind: Whitespace, len: 9 }
         "#]],
     )

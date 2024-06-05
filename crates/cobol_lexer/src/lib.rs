@@ -73,8 +73,10 @@ pub enum TokenKind {
     /// lexed as its own distinct token).
     UnknownPrefix,
 
-    /// Examples: `"123"`, `"abc`, `'cde'`, `'23b`.
-    Str { terminated: bool },
+    /// Examples: `12.0`, `1.0e-40`, `x"123"`.
+    ///
+    /// See [LiteralKind] for more details.
+    Literal { kind: LiteralKind, suffix_start: u32 },
 
     // One-char tokens:
     /// ";"
@@ -111,6 +113,34 @@ pub enum TokenKind {
 
     /// End of input.
     Eof,
+}
+
+/// Enum representing the literal types supported by the lexer.
+///
+/// Note that the suffix is *not* considered when deciding the `LiteralKind` in
+/// this type. This means that float literals like `1f32` are classified by this
+/// type as `Int`. (Compare against `rustc_ast::token::LitKind` and
+/// `rustc_ast::ast::LitKind`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LiteralKind {
+    /// `12`
+    Int,
+    /// `12.34`, `1.0e3`, `1.0e`
+    Float { empty_exponent: bool },
+    /// `"abc"`, `"abc`, `'abc'`
+    Str { terminated: bool },
+    /// `x"ff00"`, `X"1234f`, `x'ff00'`
+    HexStr { terminated: bool },
+    /// `z"abcxyz"`, `Z"abc0324z`, `z'abc'`
+    NullStr { terminated: bool },
+    /// `g"<abcxyz>"`, `G"<abc0324z>`, `g'<abc>'`
+    DbcsGStr { terminated: bool },
+    /// `n"<abcxyz>"`, `N"<abc0324z>`, `n'<abc>'`
+    DbcsNStr { terminated: bool },
+    /// `u"abc"`, `U"abc`, `u'abc'`
+    Utf8Str { terminated: bool },
+    /// `ux"abc"`, `UX"abc`, `ux'abc'`
+    Utf8HexStr { terminated: bool },
 }
 
 /// Creates an iterator that produces tokens from the input string. It assumes
@@ -174,11 +204,45 @@ impl Cursor<'_> {
             // Whitespace sequence.
             c if is_whitespace(c) => self.whitespace(),
 
-            c if c.is_ascii_digit() => self.number_or_ident_or_unknown_prefix(),
+            // Hex str
+            'x' | 'X' => {
+                self.string_literal_or_ident(|terminated| LiteralKind::HexStr { terminated })
+            }
+
+            // Null str
+            'z' | 'Z' => {
+                self.string_literal_or_ident(|terminated| LiteralKind::NullStr { terminated })
+            }
+
+            // Dbcs G str
+            'g' | 'G' => {
+                self.string_literal_or_ident(|terminated| LiteralKind::DbcsGStr { terminated })
+            }
+
+            // Dbcs N str
+            'n' | 'N' => {
+                self.string_literal_or_ident(|terminated| LiteralKind::DbcsNStr { terminated })
+            }
+
+            // Utf-8 str, Utf-8 hex str
+            'u' | 'U' => match (self.first(), self.second()) {
+                (c @ ('\'' | '"'), _) => {
+                    self.bump();
+                    self.string_literal(|terminated| LiteralKind::Utf8Str { terminated }, c)
+                }
+                ('x' | 'X', c @ ('\'' | '"')) => {
+                    self.bump();
+                    self.bump();
+                    self.string_literal(|terminated| LiteralKind::Utf8HexStr { terminated }, c)
+                }
+                _ => self.ident_or_unknown_prefix(),
+            },
+
+            '0'..='9' => self.number_or_ident(),
 
             // Identifier (this should be checked after other variant that can
             // start as identifier).
-            c if c.is_ascii_alphabetic() => self.ident_or_unknown_prefix(),
+            c if is_id_start(c) => self.ident_or_unknown_prefix(),
 
             // One-symbol tokens.
             ';' => TokenKind::Semi,
@@ -191,13 +255,24 @@ impl Cursor<'_> {
             '=' => TokenKind::Eq,
             '<' => TokenKind::Lt,
             '>' => TokenKind::Gt,
-            '-' => TokenKind::Minus,
-            '+' => TokenKind::Plus,
+            '-' => match self.first() {
+                '0'..='9' => {
+                    self.bump();
+                    self.number()
+                }
+                _ => TokenKind::Minus,
+            },
+            '+' => match self.first() {
+                '0'..='9' => {
+                    self.bump();
+                    self.number()
+                }
+                _ => TokenKind::Plus,
+            },
 
             // String literal.
-            c if c == '\'' || c == '"' => {
-                let terminated = self.eat_quoted_string(c);
-                TokenKind::Str { terminated }
+            c @ ('\'' | '"') => {
+                self.string_literal(|terminated| LiteralKind::Str { terminated }, c)
             }
             // Identifier starting with an non-ascii. Only lexed for graceful error recovery.
             c if !c.is_ascii() => TokenKind::InvalidIdent,
@@ -222,6 +297,30 @@ impl Cursor<'_> {
         TokenKind::Whitespace
     }
 
+    fn string_literal_or_ident(&mut self, mk_kind: impl FnOnce(bool) -> LiteralKind) -> TokenKind {
+        match self.first() {
+            c @ ('\'' | '"') => {
+                self.bump();
+                self.string_literal(mk_kind, c)
+            }
+            _ => self.ident_or_unknown_prefix(),
+        }
+    }
+
+    fn string_literal(
+        &mut self,
+        mk_kind: impl FnOnce(bool) -> LiteralKind,
+        quote_sym: char,
+    ) -> TokenKind {
+        debug_assert!(matches!(self.prev(), '\'' | '"'));
+        let terminated = self.eat_quoted_string(quote_sym);
+        let suffix_start = self.pos_within_token();
+        if terminated {
+            self.eat_literal_suffix();
+        }
+        TokenKind::Literal { kind: mk_kind(terminated), suffix_start }
+    }
+
     fn ident_or_unknown_prefix(&mut self) -> TokenKind {
         debug_assert!(is_id_start(self.prev()));
         // Start is already eaten, eat the rest of identifier.
@@ -235,16 +334,40 @@ impl Cursor<'_> {
         }
     }
 
-    fn number_or_ident_or_unknown_prefix(&mut self) -> TokenKind {
-        debug_assert!(self.prev().is_ascii_digit());
-        self.eat_while(|c| c.is_ascii_digit());
-        // Known prefixes must have been handled earlier. So if
-        // we see a prefix here, it is definitely an unknown prefix.
+    fn number_or_ident(&mut self) -> TokenKind {
+        debug_assert!('0' <= self.prev() && self.prev() <= '9');
+        self.eat_decimal_digits();
         match self.first() {
-            '"' | '\'' => TokenKind::UnknownPrefix,
             c if is_id_continue(c) => self.ident_or_unknown_prefix(),
+            '.' => self.number(),
             _ => TokenKind::NumberIdent,
         }
+    }
+
+    fn number(&mut self) -> TokenKind {
+        debug_assert!('0' <= self.prev() && self.prev() <= '9');
+        self.eat_decimal_digits();
+        let kind = match self.first() {
+            '.' if self.second() != '.' => {
+                self.bump();
+                let mut empty_exponent = false;
+                if self.first().is_ascii_digit() {
+                    self.eat_decimal_digits();
+                    match self.first() {
+                        'e' | 'E' => {
+                            self.bump();
+                            empty_exponent = !self.eat_float_exponent();
+                        }
+                        _ => (),
+                    }
+                }
+                LiteralKind::Float { empty_exponent }
+            }
+            _ => LiteralKind::Int,
+        };
+        let suffix_start = self.pos_within_token();
+        self.eat_literal_suffix();
+        TokenKind::Literal { kind, suffix_start }
     }
 
     /// Eats quoted string and returns true
@@ -266,5 +389,40 @@ impl Cursor<'_> {
         }
         // End of file reached.
         false
+    }
+
+    fn eat_decimal_digits(&mut self) -> bool {
+        let mut has_digits = false;
+        while let '0'..='9' = self.first() {
+            has_digits = true;
+            self.bump();
+        }
+        has_digits
+    }
+
+    /// Eats the float exponent. Returns true if at least one digit was met,
+    /// and returns false otherwise.
+    fn eat_float_exponent(&mut self) -> bool {
+        debug_assert!(self.prev() == 'e' || self.prev() == 'E');
+        if self.first() == '-' || self.first() == '+' {
+            self.bump();
+        }
+        self.eat_decimal_digits()
+    }
+
+    // Eats the suffix of the literal, e.g. "u8".
+    fn eat_literal_suffix(&mut self) {
+        self.eat_identifier();
+    }
+
+    // Eats the identifier. Note: succeeds on `_`, which isn't a valid
+    // identifier.
+    fn eat_identifier(&mut self) {
+        if !is_id_start(self.first()) {
+            return;
+        }
+        self.bump();
+
+        self.eat_while(is_id_continue);
     }
 }

@@ -51,6 +51,14 @@ impl<'a> Cursor<'a> {
         self.chars.clone().next().unwrap_or(EOF_CHAR)
     }
 
+    /// Peeks the second symbol from the input stream without consuming it.
+    pub(crate) fn second(&self) -> char {
+        // `.next()` optimizes better than `.nth(1)`
+        let mut iter = self.chars.clone();
+        iter.next();
+        iter.next().unwrap_or(EOF_CHAR)
+    }
+
     /// Peeks the third symbol from the input stream without consuming it.
     pub fn third(&self) -> char {
         // `.next()` optimizes better than `.nth(1)`
