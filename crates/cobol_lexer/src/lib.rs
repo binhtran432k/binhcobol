@@ -134,9 +134,11 @@ pub enum LiteralKind {
     /// `z"abcxyz"`, `Z"abc0324z`, `z'abc'`
     NullStr { terminated: bool },
     /// `g"<abcxyz>"`, `G"<abc0324z>`, `g'<abc>'`
-    DbcsGStr { terminated: bool },
+    DbcsStr { terminated: bool },
     /// `n"<abcxyz>"`, `N"<abc0324z>`, `n'<abc>'`
-    DbcsNStr { terminated: bool },
+    NationalOrDbcsStr { terminated: bool },
+    /// `nx"<abcxyz>"`, `NX"<abc0324z>`, `nx'<abc>'`
+    NationalHexStr { terminated: bool },
     /// `u"abc"`, `U"abc`, `u'abc'`
     Utf8Str { terminated: bool },
     /// `ux"abc"`, `UX"abc`, `ux'abc'`
@@ -216,12 +218,21 @@ impl Cursor<'_> {
 
             // Dbcs G str
             'g' | 'G' => {
-                self.string_literal_or_ident(|terminated| LiteralKind::DbcsGStr { terminated })
+                self.string_literal_or_ident(|terminated| LiteralKind::DbcsStr { terminated })
             }
 
-            // Dbcs N str
-            'n' | 'N' => {
-                self.string_literal_or_ident(|terminated| LiteralKind::DbcsNStr { terminated })
+            // Dbcs or National str, National hex str
+            'n' | 'N' => match (self.first(), self.second()){
+                (c @ ('\'' | '"'), _) => {
+                    self.bump();
+                    self.string_literal(|terminated| LiteralKind::NationalOrDbcsStr { terminated }, c)
+                }
+                ('x' | 'X', c @ ('\'' | '"')) => {
+                    self.bump();
+                    self.bump();
+                    self.string_literal(|terminated| LiteralKind::NationalHexStr { terminated }, c)
+                }
+                _ => self.ident_or_unknown_prefix(),
             }
 
             // Utf-8 str, Utf-8 hex str
