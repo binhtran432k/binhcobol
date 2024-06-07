@@ -8,4 +8,13 @@ license = "MIT OR Apache-2.0"
 authors = ["Binh Tran <binhtran432k@gmail.com>"]
 
 [workspace.dependencies]
+# local crates
+cobol_lexer = { path = "./crates/cobol_lexer", version = "0.0.0" }
+
+# local crates that aren't published to crates.io. These should not have versions.
+sourcegen = { path = "./crates/sourcegen" }
+
+# non-local crates
 expect-test = "1.5.0"
+tracing = "0.1.40"
+xshell = "0.2.5"

@@ -8,5 +8,5 @@ authors.workspace = true
 [dependencies]
 proc-macro2 = "1.0.82"
 quote = "1.0.36"
-xshell = "0.2.6"
-sourcegen = { path = "../crates/sourcegen" }
+xshell.workspace = true
+sourcegen.workspace = true
