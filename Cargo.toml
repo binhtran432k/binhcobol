@@ -11,6 +11,7 @@ authors = ["Binh Tran <binhtran432k@gmail.com>"]
 # local crates
 cobol_lexer = { path = "./crates/cobol_lexer", version = "0.0.0" }
 limit = { path = "./crates/limit", version = "0.0.0" }
+stdx = { path = "./crates/stdx", version = "0.0.0" }
 
 # local crates that aren't published to crates.io. These should not have versions.
 sourcegen = { path = "./crates/sourcegen" }
