@@ -117,7 +117,8 @@ fn generate_syntax_kinds(grammar: KindsSrc<'_>) -> String {
             }
 
             pub fn from_keyword(ident: &str) -> Option<SyntaxKind> {
-                let kw = match ident {
+                let ident = ident.to_ascii_uppercase();
+                let kw = match ident.as_str() {
                     #(#full_keywords_values => #full_keywords,)*
                     _ => return None,
                 };
@@ -125,7 +126,8 @@ fn generate_syntax_kinds(grammar: KindsSrc<'_>) -> String {
             }
 
             pub fn from_contextual_keyword(ident: &str) -> Option<SyntaxKind> {
-                let kw = match ident {
+                let ident = ident.to_ascii_uppercase();
+                let kw = match ident.as_str() {
                     #(#contextual_keywords_values => #contextual_keywords,)*
                     _ => return None,
                 };
